@@ -5,12 +5,13 @@ on:
     branches:
       - dev
       - uat
+      - main
                                                
 jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name }}
+    #environment: ${{ github.ref_name }}
 
     steps:
     - name: Checkout
