@@ -35,7 +35,7 @@ jobs:
         tags: |
           ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
           ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:latest
-        # platforms: linux/amd64
+        platforms: linux/amd64
         # provenance: false
 
     - name: Download task definition
