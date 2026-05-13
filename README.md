@@ -1,6 +1,6 @@
-# Introduction
+# ECS Deployment POC
 
-This is a sample application used to demonstrate a POC of using GitHub Actions to deploy to AWS ECR and Fargate.
+A proof-of-concept demonstrating GitHub Actions CI/CD to deploy a containerised Python/Flask app to AWS ECR and ECS Fargate, with infrastructure managed by Terraform.
 
 # Architecture Diagram
 
@@ -10,52 +10,54 @@ This is a sample application used to demonstrate a POC of using GitHub Actions t
 
 ```
 .
-├── Dockerfile          # Container definition using node:16-alpine
-├── index.js            # Express app serving on port 8080
-├── package.json        # Node.js dependencies (Express 4.x)
+├── app.py                  # Flask app serving on port 8080
+├── requirements.txt        # Python dependencies (Flask)
+├── Dockerfile              # Container definition using python:latest
 └── terraform/
-    ├── backend.tf      # S3 remote state backend (ap-southeast-1)
-    ├── main.tf         # ECR repo, ECS Fargate cluster, service, and security 
-    └── provider.tf     # AWS provider (ap-southeast-1)
+    ├── backend.tf          # S3 remote state backend (ap-southeast-1)
+    ├── main.tf             # ECR repo, ECS Fargate cluster, service, and security group
+    └── provider.tf         # AWS provider (ap-southeast-1)
 ```
 
 # Application
 
-A simple Node.js/Express HTTP server with two endpoints:
+A simple Python/Flask HTTP server:
 
 | Endpoint | Response |
 |----------|----------|
-| `GET /` | `Hello from Node 4!` |
-| `GET /test` | `Hello from /test Node!` |
+| `GET /` | `Hello, YOURNAME!` |
 
 Listens on `0.0.0.0:8080`.
 
 ## Run Locally
 
 ```bash
-npm install
-npm start
+pip install -r requirements.txt
+python app.py
 # App available at http://localhost:8080
 ```
 
 ## Run with Docker
 
 ```bash
-docker build -t hello-node .
-docker run -p 8080:8080 hello-node
+docker build -t flask-app .
+docker run -p 8080:8080 flask-app
 ```
 
 # Infrastructure (Terraform)
 
 Provisions the following AWS resources in **ap-southeast-1**:
 
-- **ECR Repository** — stores the Docker image (`<prefix>-ecr`)
-- **ECS Fargate Cluster** — runs the containerised app (`<prefix>-ecs`)
+- **ECR Repository** — stores the Docker image (`<prefix>-ecs-demo-ecr`)
+- **ECS Fargate Cluster** — runs the containerised app (`<prefix>-ecs-demo`)
   - Task: 512 CPU / 1024 MB memory
   - Container port: `8080/tcp`
   - Assigns a public IP; uses the default VPC and its subnets
 - **Security Group** — allows inbound `HTTP:8080` from `0.0.0.0/0`, all egress
-- **S3 Backend** — remote state stored in `sctp-core-tfstate` (`ecs-cicd-jaz.tfstate`)
+
+Remote state is stored in S3 (`sctp-core-tfstate` bucket, `ecs-cicd-jaz.tfstate` key).
+
+The resource name prefix is derived automatically from the IAM caller identity (the IAM username segment of the ARN).
 
 ## Terraform Usage
 
@@ -66,8 +68,26 @@ terraform plan
 terraform apply
 ```
 
-> Update the `prefix` local in `main.tf` before deploying to avoid naming collisions.
-
 # CI/CD
 
-GitHub Actions workflow builds the Docker image, pushes it to ECR, and triggers a new ECS deployment on every push.
+Four GitHub Actions workflows are included:
+
+| Workflow | Trigger | Description |
+|----------|---------|-------------|
+| `Deploy Infrastructure` | `workflow_dispatch` | Runs `terraform init → plan → apply` to provision AWS resources |
+| `Destroy Infrastructure` | `workflow_dispatch` | Runs `terraform destroy` to tear down all resources |
+| `Deploy to Amazon ECS` | `workflow_dispatch` | Builds image with Docker Buildx, pushes to ECR, updates ECS task definition, deploys to Fargate |
+| `docker-build-multienv` | *(commented out)* | Multi-branch variant (dev/uat/main) for future multi-environment deployments |
+
+## Required GitHub Secrets & Variables
+
+| Name | Type | Description |
+|------|------|-------------|
+| `AWS_ACCESS_KEY_ID` | Secret | IAM access key |
+| `AWS_SECRET_ACCESS_KEY` | Secret | IAM secret key |
+| `AWS_REGION` | Variable | Target AWS region (e.g. `ap-southeast-1`) |
+| `ECR_REPOSITORY` | Variable | ECR repository name |
+| `TASK_DEF` | Variable | ECS task definition family name |
+| `CONTAINER_NAME` | Variable | Container name within the task definition |
+| `ECS_SERVICE` | Variable | ECS service name |
+| `ECS_CLUSTER` | Variable | ECS cluster name |

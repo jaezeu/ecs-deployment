@@ -1,50 +1,29 @@
 locals {
-  prefix = "jaz-dev"  #Change
-}
-
-data "aws_caller_identity" "current" {}
-
-data "aws_region" "current" {}
-
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_subnets" "public" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
+  name_prefix     = split("/", "${data.aws_caller_identity.current.arn}")[1]
+  resource_prefix = "${local.name_prefix}-ecs-demo"
 }
 
 resource "aws_ecr_repository" "ecr" {
-  name         = "${local.prefix}-ecr"
+  name         = "${local.resource_prefix}-ecr"
   force_delete = true
 }
 
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
-  version = "~> 5.9.0"
+  version = "~> 7.5.0"
 
-  cluster_name = "${local.prefix}-ecs"
-
-  fargate_capacity_providers = {
-    FARGATE = {
-      default_capacity_provider_strategy = {
-        weight = 100
-      }
-    }
-  }
+  cluster_name = local.resource_prefix
+  cluster_capacity_providers = ["FARGATE"]
 
   services = {
-    jaz-ecs-cicd = { #task def and service name -> #Change
+    "${local.resource_prefix}-svc" = { #task def and service name
       cpu    = 512
       memory = 1024
       # Container definition(s)
       container_definitions = {
-        jaz-ecs-container = { #container name -> Change
+        "${local.resource_prefix}-container" = { #container name
           essential = true
-          image     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${local.prefix}-ecr:latest"
+          image     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.region}.amazonaws.com/${local.resource_prefix}-ecr:latest"
           port_mappings = [
             {
               containerPort = 8080
@@ -63,9 +42,9 @@ module "ecs" {
 
 module "ecs_sg" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.1.0"
+  version = "~> 5.3.1"
 
-  name        = "${local.prefix}-ecs-sg"
+  name        = "${local.resource_prefix}-sg"
   description = "Security group for ecs"
   vpc_id      = data.aws_vpc.default.id
 

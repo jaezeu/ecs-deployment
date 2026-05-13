@@ -1,16 +1,18 @@
-FROM node:16-alpine
+# Using latest base image  from DockerHub
+FROM python:latest
 
-# # Create app directory
-WORKDIR /my-app
+#Creating working directory inside container#
+WORKDIR /app
 
-# # Install app dependencies
-# # A wildcard is used to ensure both package.json AND package-lock.json are copied
-COPY package*.json ./
+#Copy source code into working directory inside container
+COPY . /app
 
-RUN npm install
+#Install flask inside container
+RUN pip install -r requirements.txt
 
-# # Bundle app source
-COPY . .
-
+#Expose container port
 EXPOSE 8080
-CMD [ "node", "index.js" ]
+
+#Start flask app
+ENTRYPOINT ["python"]
+CMD ["app.py"]
